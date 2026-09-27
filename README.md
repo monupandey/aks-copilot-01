@@ -4,7 +4,7 @@ Terraform configuration for an enterprise Azure Kubernetes Service cluster. The 
 
 ## Naming
 
-Names follow `rg-manish-cin-dev-xxxxx-01`. The five or six character `random_identifier` is an explicit input so names remain deterministic across plans. Resource prefixes include `vnet`, `aks`, `law`, `uai`, `kv`, and `acr`.
+Names follow `rg-manish-cin-dev-xxxxx-01`. The five or six character `random_identifier` is an explicit input so names remain deterministic across plans. Resource prefixes include `vnet`, `aks`, `uai`, `kv`, and `acr`.
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@ Names follow `rg-manish-cin-dev-xxxxx-01`. The five or six character `random_ide
 - A state backend configured for the deployment pipeline or supplied with `-backend-config`.
 - An Azure federated identity credential for GitHub Actions with `id-token: write`.
 - The pipeline identity needs at least Contributor on the target scope and User Access Administrator if Terraform creates role assignments.
-- A Log Analytics workspace ID and Microsoft Entra admin group object ID.
+- A Microsoft Entra admin group object ID.
 
 ## Local use
 
@@ -25,4 +25,4 @@ The workflow runs fmt, init, validate, and plan for pull requests. A push to `ma
 
 ## Enterprise decisions to confirm
 
-Confirm the remote state storage and locking design, approved IP ranges and private DNS topology, Azure Policy assignments, ingress and egress controls, backup and disaster recovery requirements, node pool/SKU capacity, maintenance windows, diagnostic retention, and whether the Log Analytics workspace is shared or dedicated.
+Confirm the remote state storage and locking design, approved IP ranges and private DNS topology, Azure Policy assignments, ingress and egress controls, backup and disaster recovery requirements, node pool/SKU capacity, maintenance windows, diagnostic retention, and the future Log Analytics integration.

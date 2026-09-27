@@ -18,7 +18,6 @@ variable "user_node_pools" {
     zones     = optional(list(string), ["1", "2", "3"])
   }))
 }
-variable "log_analytics_workspace_id" { type = string }
 variable "github_repository" { type = string }
 variable "github_branch" { type = string }
 variable "tags" { type = map(string) }

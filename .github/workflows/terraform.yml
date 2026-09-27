@@ -34,7 +34,6 @@ jobs:
           TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
           TF_VAR_random_identifier: ${{ vars.TF_RANDOM_IDENTIFIER }}
-          TF_VAR_log_analytics_workspace_id: ${{ vars.TF_LOG_ANALYTICS_WORKSPACE_ID }}
           TF_VAR_github_repository: ${{ github.repository }}
       - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: terraform apply -input=false tfplan

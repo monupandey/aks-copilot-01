@@ -99,11 +99,6 @@ variable "user_node_pools" {
   }
 }
 
-variable "log_analytics_workspace_id" {
-  type        = string
-  description = "Existing Log Analytics workspace resource ID."
-}
-
 variable "github_repository" {
   type        = string
   description = "GitHub repository in owner/repository form for OIDC federation."

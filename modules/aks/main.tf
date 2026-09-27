@@ -54,13 +54,6 @@ module "aks" {
     dns_service_ip      = var.dns_service_ip
   }
 
-  addon_profile_oms_agent = {
-    enabled = true
-    config = {
-      log_analytics_workspace_resource_id = var.log_analytics_workspace_id
-    }
-  }
-
   addon_profile_key_vault_secrets_provider = {
     enabled = true
     config = {
