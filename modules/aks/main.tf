@@ -49,7 +49,7 @@ module "aks" {
     network_plugin_mode = "overlay"
     network_policy      = "azure"
     network_dataplane   = "azure"
-    outbound_type       = "managedNATGateway"
+    outbound_type       = "loadBalancer"
     service_cidr        = var.service_cidr
     dns_service_ip      = var.dns_service_ip
   }
