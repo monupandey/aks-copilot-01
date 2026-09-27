@@ -29,7 +29,7 @@ variable "workload" {
 variable "region_code" {
   type        = string
   description = "Short region code used in names."
-  default     = "cin"
+  default     = "neu"
 }
 
 variable "random_identifier" {
@@ -92,9 +92,9 @@ variable "user_node_pools" {
   }))
   default = {
     user = {
-      vm_size   = "Standard_D4ds_v5"
+      vm_size   = "Standard_D2ds_v5"
       min_count = 1
-      max_count = 5
+      max_count = 1
     }
   }
 }

@@ -4,7 +4,7 @@ Terraform configuration for an enterprise Azure Kubernetes Service cluster. The 
 
 ## Naming
 
-Names follow `rg-manish-cin-dev-xxxxx-01`. The five or six character `random_identifier` is an explicit input so names remain deterministic across plans. Resource prefixes include `vnet`, `aks`, `uai`, `kv`, and `acr`.
+Names follow `rg-manish-neu-dev-xxxxx-01`. The five or six character `random_identifier` is an explicit input so names remain deterministic across plans. Resource prefixes include `vnet`, `aks`, `uai`, `kv`, and `acr`.
 
 ## Prerequisites
 
@@ -21,18 +21,11 @@ Names follow `rg-manish-cin-dev-xxxxx-01`. The five or six character `random_ide
 3. Run `terraform init`, `terraform fmt -check -recursive`, `terraform validate`, and `terraform plan`.
 4. Apply only after reviewing the plan.
 
-If the resource group was created by an earlier failed deployment and is not in the current state, import it once before planning:
-
-```bash
-terraform import azurerm_resource_group.this \
-	/subscriptions/<subscription-id>/resourceGroups/rg-manish-cin-dev-<random-identifier>-01
-```
-
 The workflow runs fmt, init, validate, and plan for pull requests. A push to `main` applies the reviewed plan behind the `production` GitHub environment protection. Manual runs support `plan`, `apply`, and `destroy`; `apply` and `destroy` require approval from the `production` environment.
 
 To destroy the managed resources, open the **terraform** GitHub Actions workflow, select **Run workflow**, choose `destroy`, and approve the `production` environment. The workflow creates a `terraform plan -destroy` plan and applies that reviewed destroy plan. Do not use `terraform destroy` against a normal plan file.
 
-CI uses the optional `TF_RANDOM_IDENTIFIER` repository variable when it is set. Otherwise, it derives a stable five-character identifier from the repository name, so the required Terraform variable is never passed as an empty string. Before planning, CI imports the deterministic resource group, VNet, and subnets if Azure already has them but Terraform state does not.
+CI uses the optional `TF_RANDOM_IDENTIFIER` repository variable when it is set. Otherwise, it derives a stable five-character identifier from the repository name, so the required Terraform variable is never passed as an empty string.
 
 ## Enterprise decisions to confirm
 
