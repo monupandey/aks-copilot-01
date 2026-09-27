@@ -11,7 +11,7 @@ variable "tenant_id" {
 variable "location" {
   type        = string
   description = "Azure region."
-  default     = "northeurope"
+  default     = "westeurope"
 }
 
 variable "environment" {
@@ -29,7 +29,7 @@ variable "workload" {
 variable "region_code" {
   type        = string
   description = "Short region code used in names."
-  default     = "neu"
+  default     = "weu"
 }
 
 variable "random_identifier" {
@@ -80,7 +80,7 @@ variable "admin_group_object_ids" {
 
 variable "system_node_vm_size" {
   type    = string
-  default = "Standard_B2s_v2"
+  default = "Standard_D2ds_v6"
 }
 
 variable "user_node_pools" {
@@ -88,11 +88,11 @@ variable "user_node_pools" {
     vm_size   = string
     min_count = number
     max_count = number
-    zones     = optional(list(string), [])
+    zones     = optional(list(string), ["1"])
   }))
   default = {
     user = {
-      vm_size   = "Standard_B2s_v2"
+      vm_size   = "Standard_D2ds_v6"
       min_count = 1
       max_count = 1
     }
