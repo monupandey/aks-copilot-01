@@ -30,7 +30,7 @@ terraform import azurerm_resource_group.this \
 
 The workflow runs fmt, init, validate, and plan for pull requests. A push to `main` applies the reviewed plan behind the `production` GitHub environment protection.
 
-CI uses the optional `TF_RANDOM_IDENTIFIER` repository variable when it is set. Otherwise, it derives a stable five-character identifier from the repository name, so the required Terraform variable is never passed as an empty string. Before planning, CI imports the deterministic resource group if Azure already has it but Terraform state does not.
+CI uses the optional `TF_RANDOM_IDENTIFIER` repository variable when it is set. Otherwise, it derives a stable five-character identifier from the repository name, so the required Terraform variable is never passed as an empty string. Before planning, CI imports the deterministic resource group, VNet, and subnets if Azure already has them but Terraform state does not.
 
 ## Enterprise decisions to confirm
 
