@@ -23,6 +23,8 @@ Names follow `rg-manish-cin-dev-xxxxx-01`. The five or six character `random_ide
 
 The workflow runs fmt, init, validate, and plan for pull requests. A push to `main` applies the reviewed plan behind the `production` GitHub environment protection.
 
+CI uses the optional `TF_RANDOM_IDENTIFIER` repository variable when it is set. Otherwise, it derives a stable five-character identifier from the repository name, so the required Terraform variable is never passed as an empty string.
+
 ## Enterprise decisions to confirm
 
 Confirm the remote state storage and locking design, approved IP ranges and private DNS topology, Azure Policy assignments, ingress and egress controls, backup and disaster recovery requirements, node pool/SKU capacity, maintenance windows, diagnostic retention, and the future Log Analytics integration.

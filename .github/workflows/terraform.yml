@@ -26,6 +26,22 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Set deterministic resource identifier
+        env:
+          CONFIGURED_IDENTIFIER: ${{ vars.TF_RANDOM_IDENTIFIER }}
+        run: |
+          if [ -n "$CONFIGURED_IDENTIFIER" ]; then
+            identifier="$CONFIGURED_IDENTIFIER"
+          else
+            identifier="$(printf '%s' "$GITHUB_REPOSITORY" | sha256sum | cut -c1-5)"
+          fi
+
+          if ! printf '%s' "$identifier" | grep -Eq '^[a-z0-9]{5,6}$'; then
+            echo "TF_RANDOM_IDENTIFIER must contain 5-6 lowercase letters or digits"
+            exit 1
+          fi
+
+          echo "TF_VAR_random_identifier=$identifier" >> "$GITHUB_ENV"
       - run: terraform fmt -check -recursive
       - run: terraform init -input=false
       - run: terraform validate
@@ -33,7 +49,6 @@ jobs:
         env:
           TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
-          TF_VAR_random_identifier: ${{ vars.TF_RANDOM_IDENTIFIER }}
           TF_VAR_github_repository: ${{ github.repository }}
       - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: terraform apply -input=false tfplan
