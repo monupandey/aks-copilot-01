@@ -13,6 +13,7 @@ module "aks" {
   name               = var.name
   location           = var.location
   parent_id          = var.resource_group_id
+  dns_prefix         = var.name
   kubernetes_version = var.kubernetes_version
   sku = {
     name = "Base"
