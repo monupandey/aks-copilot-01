@@ -21,9 +21,16 @@ Names follow `rg-manish-cin-dev-xxxxx-01`. The five or six character `random_ide
 3. Run `terraform init`, `terraform fmt -check -recursive`, `terraform validate`, and `terraform plan`.
 4. Apply only after reviewing the plan.
 
+If the resource group was created by an earlier failed deployment and is not in the current state, import it once before planning:
+
+```bash
+terraform import azurerm_resource_group.this \
+	/subscriptions/<subscription-id>/resourceGroups/rg-manish-cin-dev-<random-identifier>-01
+```
+
 The workflow runs fmt, init, validate, and plan for pull requests. A push to `main` applies the reviewed plan behind the `production` GitHub environment protection.
 
-CI uses the optional `TF_RANDOM_IDENTIFIER` repository variable when it is set. Otherwise, it derives a stable five-character identifier from the repository name, so the required Terraform variable is never passed as an empty string.
+CI uses the optional `TF_RANDOM_IDENTIFIER` repository variable when it is set. Otherwise, it derives a stable five-character identifier from the repository name, so the required Terraform variable is never passed as an empty string. Before planning, CI imports the deterministic resource group if Azure already has it but Terraform state does not.
 
 ## Enterprise decisions to confirm
 

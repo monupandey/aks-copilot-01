@@ -44,6 +44,18 @@ jobs:
           echo "TF_VAR_random_identifier=$identifier" >> "$GITHUB_ENV"
       - run: terraform fmt -check -recursive
       - run: terraform init -input=false
+      - name: Import existing resource group when needed
+        env:
+          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          TF_VAR_github_repository: ${{ github.repository }}
+        run: |
+          resource_group_name="rg-manish-cin-dev-${TF_VAR_random_identifier}-01"
+          resource_group_id=$(az group show --name "$resource_group_name" --query id --output tsv 2>/dev/null || true)
+
+          if [ -n "$resource_group_id" ] && ! terraform state list 2>/dev/null | grep -Fxq 'azurerm_resource_group.this'; then
+            terraform import -input=false azurerm_resource_group.this "$resource_group_id"
+          fi
       - run: terraform validate
       - run: terraform plan -input=false -out=tfplan
         env:
