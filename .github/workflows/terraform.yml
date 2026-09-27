@@ -4,6 +4,16 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Terraform operation"
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
 
 permissions:
   id-token: write
@@ -17,7 +27,7 @@ env:
 jobs:
   terraform:
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'push' && 'production' || 'plan' }}
+    environment: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.action != 'plan')) && 'production' || 'plan' }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
@@ -74,10 +84,17 @@ jobs:
             fi
           done
       - run: terraform validate
-      - run: terraform plan -input=false -out=tfplan
+      - if: github.event_name != 'workflow_dispatch' || inputs.action != 'destroy'
+        run: terraform plan -input=false -out=tfplan
         env:
           TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
           TF_VAR_github_repository: ${{ github.repository }}
-      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: terraform destroy -input=false tfplan
+      - if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
+        run: terraform plan -destroy -input=false -out=tfplan
+        env:
+          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+          TF_VAR_github_repository: ${{ github.repository }}
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' && inputs.action == 'apply' || github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
+        run: terraform apply -input=false tfplan
