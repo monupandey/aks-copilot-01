@@ -80,7 +80,7 @@ variable "admin_group_object_ids" {
 
 variable "system_node_vm_size" {
   type    = string
-  default = "Standard_D4ds_v5"
+  default = "Standard_B2s_v2"
 }
 
 variable "user_node_pools" {
@@ -92,7 +92,7 @@ variable "user_node_pools" {
   }))
   default = {
     user = {
-      vm_size   = "Standard_D2ds_v5"
+      vm_size   = "Standard_B2s_v2"
       min_count = 1
       max_count = 1
     }
