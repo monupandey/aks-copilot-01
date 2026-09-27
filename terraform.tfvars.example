@@ -1,9 +1,9 @@
 subscription_id       = "00000000-0000-0000-0000-000000000000"
 tenant_id              = "00000000-0000-0000-0000-000000000000"
-location               = "westeurope"
+location               = "eastus2"
 environment            = "dev"
 workload               = "manish"
-region_code            = "weu"
+region_code            = "eus2"
 random_identifier      = "abc12"
 instance               = "01"
 admin_group_object_ids = ["00000000-0000-0000-0000-000000000000"]

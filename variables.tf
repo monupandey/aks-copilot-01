@@ -11,7 +11,7 @@ variable "tenant_id" {
 variable "location" {
   type        = string
   description = "Azure region."
-  default     = "westeurope"
+  default     = "eastus2"
 }
 
 variable "environment" {
@@ -29,7 +29,7 @@ variable "workload" {
 variable "region_code" {
   type        = string
   description = "Short region code used in names."
-  default     = "weu"
+  default     = "eus2"
 }
 
 variable "random_identifier" {

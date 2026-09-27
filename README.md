@@ -4,7 +4,7 @@ Terraform configuration for an enterprise Azure Kubernetes Service cluster. The 
 
 ## Naming
 
-Names follow `rg-manish-weu-dev-xxxxx-01`. The five or six character `random_identifier` is an explicit input so names remain deterministic across plans. Resource prefixes include `vnet`, `aks`, `uai`, `kv`, and `acr`.
+Names follow `rg-manish-eus2-dev-xxxxx-01`. The five or six character `random_identifier` is an explicit input so names remain deterministic across plans. Resource prefixes include `vnet`, `aks`, `uai`, `kv`, and `acr`.
 
 ## Prerequisites
 
