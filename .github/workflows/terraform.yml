@@ -80,4 +80,4 @@ jobs:
           TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
           TF_VAR_github_repository: ${{ github.repository }}
       - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: terraform apply -input=false tfplan
+        run: terraform destroy -input=false tfplan
