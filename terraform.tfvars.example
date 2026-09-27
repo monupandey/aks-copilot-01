@@ -1,0 +1,12 @@
+subscription_id       = "00000000-0000-0000-0000-000000000000"
+tenant_id              = "00000000-0000-0000-0000-000000000000"
+location               = "centralindia"
+environment            = "dev"
+workload               = "manish"
+region_code            = "cin"
+random_identifier      = "abc12"
+instance               = "01"
+log_analytics_workspace_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-shared/providers/Microsoft.OperationalInsights/workspaces/law-shared"
+admin_group_object_ids = ["00000000-0000-0000-0000-000000000000"]
+github_repository      = "your-org/your-repository"
+github_branch          = "main"
