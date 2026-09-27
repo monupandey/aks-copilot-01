@@ -88,7 +88,7 @@ variable "user_node_pools" {
     vm_size   = string
     min_count = number
     max_count = number
-    zones     = optional(list(string), ["1"])
+    zones     = optional(list(string), [])
   }))
   default = {
     user = {

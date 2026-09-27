@@ -40,7 +40,6 @@ module "aks" {
     enable_auto_scaling = true
     min_count           = 2
     max_count           = 5
-    availability_zones  = ["1"]
     os_sku              = "AzureLinux"
     mode                = "System"
   }
