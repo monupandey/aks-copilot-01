@@ -69,6 +69,8 @@ Configure these GitHub repository variables:
 - `AKS_NAMESPACE`: `pets` (optional; the workflow defaults to `pets`)
 - `RUNNER_ADMIN_SSH_PUBLIC_KEY`: the SSH public key used by Terraform to create the private VM administrator account
 
+Add them under **GitHub repository > Settings > Secrets and variables > Actions > Variables > New repository variable**. For `RUNNER_ADMIN_SSH_PUBLIC_KEY`, paste the complete single-line OpenSSH public key from `terraform.tfvars.example` (starting with `ssh-rsa`). This is a public key, not the private key. The Terraform workflow checks this Actions variable directly; it does not read the local `.tfvars` file.
+
 The `production` GitHub environment must contain the existing `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID` secrets and should have required reviewers configured. The OIDC service principal needs the Azure `Azure Kubernetes Service Cluster User Role` at cluster scope and `Azure Kubernetes Service RBAC Writer` scoped to the `pets` namespace. Set its service-principal object ID in Terraform and apply the grants:
 
 ```hcl
