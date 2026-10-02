@@ -26,6 +26,11 @@ module "vnet" {
       address_prefixes = var.node_subnet_address_prefixes
       delegations      = []
     }
+    runner = {
+      name             = "snet-runner-${var.name}"
+      address_prefixes = var.runner_subnet_address_prefixes
+      delegations      = []
+    }
   }
 
   tags = var.tags
@@ -37,4 +42,8 @@ output "vnet_id" {
 
 output "aks_subnet_id" {
   value = module.vnet.subnets["aks"].resource_id
+}
+
+output "runner_subnet_id" {
+  value = module.vnet.subnets["runner"].resource_id
 }

@@ -1,0 +1,10 @@
+#cloud-config
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - jq
+runcmd:
+  - [bash, -lc, "curl -sL https://aka.ms/InstallAzureCLIDeb | bash"]
+  - [bash, -lc, "az aks install-cli --install-location /usr/local/bin/kubectl --kubelogin-install-location /usr/local/bin/kubelogin"]
