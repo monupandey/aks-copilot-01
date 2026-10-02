@@ -54,7 +54,7 @@ module "vm" {
     version   = "latest"
   }
 
-  encryption_at_host_enabled = true
+  encryption_at_host_enabled = false
   custom_data                = base64encode(file("${path.module}/cloud-init.yaml"))
   tags                       = var.tags
 }
