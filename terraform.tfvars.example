@@ -11,7 +11,7 @@ github_repository      = "your-org/your-repository"
 github_branch          = "main"
 runner_vm_size         = "Standard_D2ds_v6"
 runner_availability_zone = null
-runner_admin_ssh_public_key = "ssh-ed25519 REPLACE_WITH_YOUR_PUBLIC_KEY runner-admin"
+runner_admin_ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDO+BLvL76C2kG188qNiJSNFUnuqgZlkGmoPy/hz+ZOlGut8+fj3upqLd+ohfypML3xipvURsjwAAXEhgUoXdcvJbesEPp/HHbkxqA/FpcPC7ByM3PQQ5IN+GmQVztrv3Q0WrlA/7x+x24Q8TxaoL7Bjx1OWB51NOWNeyhLiocyWvuTcfMtoqW8coD1iHrCDneQ2Wzr8Gv8MRidvBI22rcmShC01PRAfRNb6bfwpYqyZaMSj7V9pzaDpkiEdqp2wNikv94wCmLEmpbc3P5P1j8Iv9uz/80kW2L7Ufx8T7hIecvrtVt7U40tesc2VTnLVI7uDs0k9VIDodiQKmFOucG9 rsa-key-20261002"
 
 # Add one grant per team and namespace after creating the namespace.
 # namespace_access = {
