@@ -9,3 +9,20 @@ instance               = "01"
 admin_group_object_ids = ["00000000-0000-0000-0000-000000000000"]
 github_repository      = "your-org/your-repository"
 github_branch          = "main"
+runner_vm_size         = "Standard_D2ds_v6"
+runner_availability_zone = null
+runner_admin_ssh_public_key = "ssh-ed25519 REPLACE_WITH_YOUR_PUBLIC_KEY runner-admin"
+
+# Add one grant per team and namespace after creating the namespace.
+# namespace_access = {
+#   payments_writer = {
+#     namespace             = "payments"
+#     entra_group_object_id = "00000000-0000-0000-0000-000000000000"
+#     role_definition_name  = "Azure Kubernetes Service RBAC Writer"
+#   }
+#   payments_reader = {
+#     namespace             = "payments"
+#     entra_group_object_id = "00000000-0000-0000-0000-000000000000"
+#     role_definition_name  = "Azure Kubernetes Service RBAC Reader"
+#   }
+# }

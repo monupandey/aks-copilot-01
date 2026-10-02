@@ -39,6 +39,9 @@ jobs:
       - name: Set deterministic resource identifier
         env:
           CONFIGURED_IDENTIFIER: ${{ vars.TF_RANDOM_IDENTIFIER }}
+          APP_DEPLOYER_OBJECT_ID: ${{ vars.AKS_DEPLOYER_OBJECT_ID }}
+          NAMESPACE_ACCESS_JSON: ${{ vars.TF_NAMESPACE_ACCESS_JSON }}
+          RUNNER_ADMIN_SSH_PUBLIC_KEY: ${{ vars.RUNNER_ADMIN_SSH_PUBLIC_KEY }}
         run: |
           if [ -n "$CONFIGURED_IDENTIFIER" ]; then
             identifier="$CONFIGURED_IDENTIFIER"
@@ -51,7 +54,19 @@ jobs:
             exit 1
           fi
 
+          if [ -z "$RUNNER_ADMIN_SSH_PUBLIC_KEY" ]; then
+            echo "Set repository variable RUNNER_ADMIN_SSH_PUBLIC_KEY to an SSH public key"
+            exit 1
+          fi
+
           echo "TF_VAR_random_identifier=$identifier" >> "$GITHUB_ENV"
+          echo "TF_VAR_runner_admin_ssh_public_key=$RUNNER_ADMIN_SSH_PUBLIC_KEY" >> "$GITHUB_ENV"
+          if [ -n "$APP_DEPLOYER_OBJECT_ID" ]; then
+            echo "TF_VAR_app_deployer_service_principal_object_id=$APP_DEPLOYER_OBJECT_ID" >> "$GITHUB_ENV"
+          fi
+          if [ -n "$NAMESPACE_ACCESS_JSON" ]; then
+            echo "TF_VAR_namespace_access=$NAMESPACE_ACCESS_JSON" >> "$GITHUB_ENV"
+          fi
       - run: terraform fmt -check -recursive
       - run: terraform init -input=false
       - run: terraform validate

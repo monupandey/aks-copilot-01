@@ -62,6 +62,12 @@ variable "node_subnet_address_prefixes" {
   default = ["10.40.16.0/20"]
 }
 
+variable "runner_subnet_address_prefixes" {
+  type        = list(string)
+  description = "Address prefixes for the private self-hosted runner subnet."
+  default     = ["10.40.32.0/24"]
+}
+
 variable "service_cidr" {
   type    = string
   default = "10.41.0.0/16"
@@ -76,6 +82,43 @@ variable "admin_group_object_ids" {
   type        = list(string)
   description = "Microsoft Entra group object IDs granted AKS admin access."
   default     = []
+}
+
+variable "namespace_access" {
+  description = "Namespace-scoped Azure RBAC grants for Microsoft Entra groups or service principals. Namespaces must exist in the AKS cluster."
+  type = map(object({
+    namespace                   = string
+    entra_group_object_id       = optional(string)
+    service_principal_object_id = optional(string)
+    role_definition_name        = string
+  }))
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for grant in values(var.namespace_access) :
+      (grant.entra_group_object_id != null) != (grant.service_principal_object_id != null)
+    ])
+    error_message = "Set exactly one of entra_group_object_id or service_principal_object_id for each namespace grant."
+  }
+
+  validation {
+    condition = alltrue([
+      for grant in values(var.namespace_access) : contains([
+        "Azure Kubernetes Service RBAC Reader",
+        "Azure Kubernetes Service RBAC Writer",
+        "Azure Kubernetes Service RBAC Admin",
+      ], grant.role_definition_name)
+    ])
+    error_message = "Namespace role_definition_name must be an AKS RBAC Reader, Writer, or Admin role. Do not grant Cluster Admin to application teams."
+  }
+}
+
+variable "app_deployer_service_principal_object_id" {
+  type        = string
+  description = "Optional object ID for the GitHub Actions app-deployment service principal."
+  default     = null
+  nullable    = true
 }
 
 variable "system_node_vm_size" {
@@ -96,6 +139,29 @@ variable "user_node_pools" {
       min_count = 1
       max_count = 1
     }
+  }
+}
+
+variable "runner_vm_size" {
+  type        = string
+  description = "Azure VM size for the private self-hosted GitHub Actions runner."
+  default     = "Standard_D2ds_v6"
+}
+
+variable "runner_availability_zone" {
+  type        = string
+  description = "Optional availability zone for the runner VM. Set null when zones are unavailable."
+  default     = null
+  nullable    = true
+}
+
+variable "runner_admin_ssh_public_key" {
+  type        = string
+  description = "SSH public key used for private administration of the runner VM."
+
+  validation {
+    condition     = can(regex("^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256|ecdsa-sha2-nistp384|ecdsa-sha2-nistp521) ", trimspace(var.runner_admin_ssh_public_key)))
+    error_message = "runner_admin_ssh_public_key must be a valid-format SSH public key."
   }
 }
 
