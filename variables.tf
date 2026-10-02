@@ -117,7 +117,7 @@ variable "namespace_access" {
 variable "app_deployer_service_principal_object_id" {
   type        = string
   description = "Optional object ID for the GitHub Actions app-deployment service principal."
-  default     = null
+  default     = "91976231-27bd-4a30-8a8f-bb1497810aa4"
   nullable    = true
 }
 
