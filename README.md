@@ -71,7 +71,7 @@ Configure these GitHub repository variables:
 
 Add them under **GitHub repository > Settings > Secrets and variables > Actions > Variables > New repository variable**. For `RUNNER_ADMIN_SSH_PUBLIC_KEY`, paste the complete single-line OpenSSH public key from `terraform.tfvars.example` (starting with `ssh-rsa`). This is a public key, not the private key. The Terraform workflow checks this Actions variable directly; it does not read the local `.tfvars` file.
 
-The `production` GitHub environment must contain the existing `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID` secrets and should have required reviewers configured. The OIDC service principal needs the Azure `Azure Kubernetes Service Cluster User Role` at cluster scope and `Azure Kubernetes Service RBAC Writer` scoped to the `pets` namespace. Set its service-principal object ID in Terraform and apply the grants:
+The `production` GitHub environment must contain the existing `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID` secrets and should have required reviewers configured. The OIDC service principal needs the Azure `Azure Kubernetes Service Cluster User Role` at cluster scope and `Azure Kubernetes Service RBAC Writer` scoped to the `pets` namespace. Use the **Object ID** of the service principal under **Microsoft Entra ID > Enterprise applications**. Do not use the app registration's object ID or the application's client ID; Azure rejects role assignments made to an `Application` principal. You can retrieve the service-principal object ID from its client ID with `az ad sp show --id <application-client-id> --query id -o tsv`. Set that service-principal object ID in Terraform and apply the grants:
 
 ```hcl
 app_deployer_service_principal_object_id = "<github-oidc-service-principal-object-id>"
@@ -92,7 +92,7 @@ namespace_access = {
 
 Apply the cluster infrastructure and cluster-user grant first. Then, using a platform-admin identity that can reach the private cluster, create the namespace with `kubectl create namespace pets`. Add the namespace-scoped role assignments and apply Terraform again. The app deployment identity is intentionally not granted cluster-wide write access. The sample manifest exposes the store front and admin services through public `LoadBalancer` services; review and replace those with approved ingress/private exposure before production use. The sample is a demonstration workload, not a production-ready application deployment.
 
-For GitHub Actions-driven Terraform, set repository variable `AKS_DEPLOYER_OBJECT_ID` to the OIDC service principal's object ID and `TF_NAMESPACE_ACCESS_JSON` to a JSON object matching the `namespace_access` Terraform variable. For example:
+For GitHub Actions-driven Terraform, set repository variable `AKS_DEPLOYER_OBJECT_ID` to the OIDC service principal's **Enterprise applications Object ID** and `TF_NAMESPACE_ACCESS_JSON` to a JSON object matching the `namespace_access` Terraform variable. The cluster-user assignment is skipped unless `AKS_DEPLOYER_OBJECT_ID` is set. For example:
 
 ```json
 {"app_deployer":{"namespace":"pets","service_principal_object_id":"<oidc-service-principal-object-id>","role_definition_name":"Azure Kubernetes Service RBAC Writer"},"app_team_readers":{"namespace":"pets","entra_group_object_id":"<entra-group-object-id>","role_definition_name":"Azure Kubernetes Service RBAC Reader"}}
