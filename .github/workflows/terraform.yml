@@ -23,6 +23,9 @@ permissions:
 env:
   TF_IN_AUTOMATION: true
   ARM_USE_OIDC: true
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
 jobs:
   terraform:
@@ -68,7 +71,26 @@ jobs:
             echo "TF_VAR_namespace_access=$NAMESPACE_ACCESS_JSON" >> "$GITHUB_ENV"
           fi
       - run: terraform fmt -check -recursive
-      - run: terraform init -input=false
+      - name: Initialize Terraform with Azure Blob state
+        env:
+          TF_STATE_RESOURCE_GROUP: ${{ secrets.TF_STATE_RESOURCE_GROUP }}
+          TF_STATE_STORAGE_ACCOUNT: ${{ secrets.TF_STATE_STORAGE_ACCOUNT }}
+          TF_STATE_CONTAINER: ${{ secrets.TF_STATE_CONTAINER }}
+          TF_STATE_KEY: ${{ secrets.TF_STATE_KEY }}
+        run: |
+          set -eu
+          for name in TF_STATE_RESOURCE_GROUP TF_STATE_STORAGE_ACCOUNT TF_STATE_CONTAINER TF_STATE_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "Set repository secret $name to configure the Terraform Azure Blob backend"
+              exit 1
+            fi
+          done
+
+          terraform init -input=false \
+            -backend-config="resource_group_name=$TF_STATE_RESOURCE_GROUP" \
+            -backend-config="storage_account_name=$TF_STATE_STORAGE_ACCOUNT" \
+            -backend-config="container_name=$TF_STATE_CONTAINER" \
+            -backend-config="key=$TF_STATE_KEY"
       - run: terraform validate
       - if: github.event_name != 'workflow_dispatch' || inputs.action != 'destroy'
         run: terraform plan -input=false -out=tfplan

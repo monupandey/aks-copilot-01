@@ -11,17 +11,28 @@ Names follow `rg-manish-eus2-dev-xxxxx-01`. The five or six character `random_id
 ## Prerequisites
 
 - Terraform >= 1.10 and Azure CLI.
-- A state backend configured for the deployment pipeline or supplied with `-backend-config`.
+- An existing Azure Storage account and blob container for Terraform state. The workflow configures the backend using GitHub repository secrets.
 - An Azure federated identity credential for GitHub Actions with `id-token: write`.
-- The pipeline identity needs at least Contributor on the target scope and User Access Administrator if Terraform creates role assignments.
+- The pipeline identity needs `Storage Blob Data Contributor` on the state container, at least Contributor on the target scope, and User Access Administrator if Terraform creates role assignments.
 - A Microsoft Entra admin group object ID.
 
 ## Local use
 
 1. Copy `terraform.tfvars.example` to `terraform.tfvars` and replace every placeholder.
 2. Authenticate with Azure CLI or service principal OIDC.
-3. Run `terraform init`, `terraform fmt -check -recursive`, `terraform validate`, and `terraform plan`.
+3. Run `terraform init` with the same backend settings used by CI, then `terraform fmt -check -recursive`, `terraform validate`, and `terraform plan`.
 4. Apply only after reviewing the plan.
+
+Before running the workflow, create the state storage account and blob container outside this Terraform configuration (the backend must exist before Terraform can initialize). Add these GitHub **repository secrets**:
+
+- `TF_STATE_RESOURCE_GROUP`: resource group containing the state storage account.
+- `TF_STATE_STORAGE_ACCOUNT`: storage account name.
+- `TF_STATE_CONTAINER`: existing blob container name.
+- `TF_STATE_KEY`: state blob name. Keep this value identical for every branch and run that manages this deployment.
+
+The backend uses GitHub Actions OIDC with Microsoft Entra authentication; no storage account key is required. Grant the federated GitHub identity `Storage Blob Data Contributor` on the state container. Keep the Azure client, tenant, and subscription ID secrets available to the workflow as well. The `azurerm` backend acquires a blob lease for state locking. Pull request plans and `main` applies use the same backend and key, so they share state. A separate state key per branch would make Terraform treat each branch as an independent deployment.
+
+Configuring a remote backend does not recover state that was previously stored only on a local or ephemeral runner. If you have the old state file, initialize the backend from the machine containing it with `terraform init -migrate-state` and the same backend settings. If no old state file is available, import existing Azure resources into the new backend before applying; otherwise Terraform may propose creating duplicates.
 
 The workflow runs fmt, init, validate, and plan for pull requests. A push to `main` applies the reviewed plan behind the `production` GitHub environment protection. Manual runs support `plan`, `apply`, and `destroy`; `apply` and `destroy` require approval from the `production` environment.
 
