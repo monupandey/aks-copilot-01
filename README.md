@@ -2,7 +2,7 @@
 
 Terraform configuration for an enterprise Azure Kubernetes Service cluster. The root module owns the resource group and calls separate `modules/network` and `modules/aks` modules. The module implementations use Azure Verified Modules (AVM) as the reference pattern.
 
-The infrastructure also provisions an Azure Container Registry using AVM (`Basic` SKU for development cost control, admin account disabled) and grants the AKS kubelet identity the `AcrPull` role. It creates a dedicated private runner subnet and provisions a Linux runner VM from a separate AVM module. ACR is currently public-network accessible; use Premium SKU, a private endpoint, and private DNS before requiring private registry access. The sample application continues to use upstream GHCR/MCR images until the app workflow is extended to build and push images to this ACR.
+The infrastructure also provisions an Azure Container Registry using AVM (`Basic` SKU for development cost control, admin account disabled), grants the AKS kubelet identity `AcrPull`, and grants the GitHub OIDC app-deployment identity `AcrPush`. It creates a dedicated private runner subnet and provisions a Linux runner VM from a separate AVM module. ACR is currently public-network accessible; use Premium SKU, a private endpoint, and private DNS before requiring private registry access.
 
 ## Naming
 
@@ -65,9 +65,9 @@ Namespace creation is a Kubernetes API operation and is not included in the curr
 
 ## Application Deployment
 
-The upstream AKS Store Demo repository is copied under `app/`. Its `aks-store-all-in-one.yaml` deploys the sample microservices using the upstream public container images; this pipeline does not build images. Application delivery is separate from infrastructure provisioning: `.github/workflows/deploy-app.yml` runs only for pushes to `main` that change files under `app/**`.
+The upstream AKS Store Demo repository is copied under `app/`. `.github/workflows/deploy-app.yml` runs for pushes to `main` that change files under `app/**` or the workflow itself. It detects changes in each service's `app/src/<service>/` directory, builds and pushes only those service images to the ACR in `AKS_RESOURCE_GROUP`, tags them with the commit SHA, then updates and waits for the matching AKS deployments. The workflow handles the seven services in `aks-store-all-in-one.yaml` and the separate `ai-service.yaml` deployment. Changes to either manifest apply that manifest; the full store manifest is also applied on the first deployment.
 
-The AKS API server is private, so the Terraform-managed runner VM uses the `snet-runner-*` subnet in the same VNet, has no public IP, and receives Azure CLI, `kubectl`, and `kubelogin` through cloud-init. Set `runner_admin_ssh_public_key` to a public key you control. The workflow uses the GitHub OIDC service principal and applies the sample manifest to the `pets` namespace.
+The AKS API server is private, so the Terraform-managed runner VM uses the `snet-runner-*` subnet in the same VNet, has no public IP, and receives Azure CLI, `kubectl`, and `kubelogin` through cloud-init. Set `runner_admin_ssh_public_key` to a public key you control. The build job runs on a GitHub-hosted runner; the deployment job uses the private self-hosted runner and GitHub OIDC service principal to deploy to the `pets` namespace.
 
 The VM is not automatically registered as a GitHub runner. After Terraform creates it, connect through your corporate VPN, Azure Bastion, or another approved private management path. In the GitHub repository, open **Settings > Actions > Runners > New self-hosted runner**, follow the Linux registration steps, add the `aks-private` label, and install/start the runner as a service. Do not pass the short-lived runner registration token through Terraform, cloud-init, or a saved plan.
 
@@ -77,12 +77,13 @@ Configure these GitHub repository variables:
 
 - `AKS_RESOURCE_GROUP`: for example `rg-manish-eus2-dev-1dede-01`
 - `AKS_CLUSTER_NAME`: for example `aks-manish-eus2-dev-1dede-01`
+- `ACR_NAME`: the registry name from `terraform output -raw acr_name`
 - `AKS_NAMESPACE`: `pets` (optional; the workflow defaults to `pets`)
 - `RUNNER_ADMIN_SSH_PUBLIC_KEY`: the SSH public key used by Terraform to create the private VM administrator account
 
 Add them under **GitHub repository > Settings > Secrets and variables > Actions > Variables > New repository variable**. For `RUNNER_ADMIN_SSH_PUBLIC_KEY`, paste the complete single-line OpenSSH public key from `terraform.tfvars.example` (starting with `ssh-rsa`). This is a public key, not the private key. The Terraform workflow checks this Actions variable directly; it does not read the local `.tfvars` file.
 
-The `production` GitHub environment must contain the existing `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID` secrets and should have required reviewers configured. The OIDC service principal needs the Azure `Azure Kubernetes Service Cluster User Role` at cluster scope and `Azure Kubernetes Service RBAC Writer` scoped to the `pets` namespace. Use the **Object ID** of the service principal under **Microsoft Entra ID > Enterprise applications**. Do not use the app registration's object ID or the application's client ID; Azure rejects role assignments made to an `Application` principal. You can retrieve the service-principal object ID from its client ID with `az ad sp show --id <application-client-id> --query id -o tsv`. Set that service-principal object ID in Terraform and apply the grants:
+The `production` GitHub environment must contain the existing `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID` secrets and should have required reviewers configured. The OIDC service principal needs the Azure `Azure Kubernetes Service Cluster User Role` at cluster scope, `Azure Kubernetes Service RBAC Writer` scoped to the `pets` namespace, and `AcrPush` on the ACR. Terraform grants `AcrPush` and the cluster-user role using `app_deployer_service_principal_object_id`; it grants namespace access using `namespace_access`. Use the **Object ID** of the service principal under **Microsoft Entra ID > Enterprise applications**. Do not use the app registration's object ID or the application's client ID; Azure rejects role assignments made to an `Application` principal. You can retrieve the service-principal object ID from its client ID with `az ad sp show --id <application-client-id> --query id -o tsv`. Set that service-principal object ID in Terraform and apply the grants:
 
 ```hcl
 app_deployer_service_principal_object_id = "<github-oidc-service-principal-object-id>"

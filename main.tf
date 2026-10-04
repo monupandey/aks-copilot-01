@@ -70,6 +70,15 @@ resource "azurerm_role_assignment" "aks_acr_pull" {
   principal_type       = "ServicePrincipal"
 }
 
+resource "azurerm_role_assignment" "app_deployer_acr_push" {
+  count = var.app_deployer_service_principal_object_id == null ? 0 : 1
+
+  scope                = module.acr.resource_id
+  role_definition_name = "AcrPush"
+  principal_id         = var.app_deployer_service_principal_object_id
+  principal_type       = "ServicePrincipal"
+}
+
 resource "azurerm_role_assignment" "namespace_access" {
   for_each = var.namespace_access
 
