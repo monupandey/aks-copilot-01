@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "app/**"
+      - ".github/workflows/deploy-app.yml"
 
 permissions:
   contents: read
@@ -16,13 +17,96 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      apply_ai_manifest: ${{ steps.detect.outputs.apply_ai_manifest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect AI service changes
+        id: detect
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          apply_ai_manifest=false
+          if [[ "$BEFORE" =~ ^0+$ ]]; then
+            changed_files="$(git ls-tree -r --name-only "$GITHUB_SHA")"
+          else
+            changed_files="$(git diff --name-only "$BEFORE" "$GITHUB_SHA")"
+          fi
+
+          while IFS= read -r file; do
+            case "$file" in
+              app/src/ai-service/*|app/ai-service.yaml)
+                apply_ai_manifest=true
+                break
+                ;;
+            esac
+          done <<< "$changed_files"
+
+          echo "apply_ai_manifest=$apply_ai_manifest" >> "$GITHUB_OUTPUT"
+
+  build-and-push:
+    needs: changes
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      ACR_NAME: ${{ vars.ACR_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate registry settings
+        run: |
+          test -n "$ACR_NAME" || { echo "Set repository variable ACR_NAME to the Terraform-created registry name"; exit 1; }
+
+      - name: Sign in to Azure with GitHub OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign in to ACR
+        run: |
+          set -euo pipefail
+          acr_login_server="$ACR_NAME.azurecr.io"
+          acr_token="$(az acr login --name "$ACR_NAME" --expose-token --query accessToken --output tsv)"
+          printf '%s' "$acr_token" | docker login "$acr_login_server" \
+            --username 00000000-0000-0000-0000-000000000000 \
+            --password-stdin
+          echo "ACR_LOGIN_SERVER=$acr_login_server" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push application images
+        run: |
+          set -euo pipefail
+          for service in ai-service makeline-service order-service product-service store-admin store-front virtual-customer virtual-worker; do
+            docker buildx build \
+              --platform linux/amd64 \
+              --build-arg "APP_VERSION=$GITHUB_SHA" \
+              --tag "$ACR_LOGIN_SERVER/$service:$GITHUB_SHA" \
+              --push \
+              "app/src/$service"
+          done
+
   deploy:
+    needs:
+      - changes
+      - build-and-push
     runs-on: [self-hosted, linux, aks-private]
     environment: production
     env:
       AKS_RESOURCE_GROUP: ${{ vars.AKS_RESOURCE_GROUP }}
       AKS_CLUSTER_NAME: ${{ vars.AKS_CLUSTER_NAME }}
       AKS_NAMESPACE: ${{ vars.AKS_NAMESPACE || 'pets' }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      APPLY_AI_MANIFEST: ${{ needs.changes.outputs.apply_ai_manifest }}
     steps:
       - uses: actions/checkout@v4
 
@@ -30,6 +114,7 @@ jobs:
         run: |
           test -n "$AKS_RESOURCE_GROUP" || { echo "Set repository variable AKS_RESOURCE_GROUP"; exit 1; }
           test -n "$AKS_CLUSTER_NAME" || { echo "Set repository variable AKS_CLUSTER_NAME"; exit 1; }
+          test -n "$ACR_NAME" || { echo "Set repository variable ACR_NAME to the Terraform-created registry name"; exit 1; }
           command -v az >/dev/null || { echo "Azure CLI is required on this runner"; exit 1; }
           command -v kubectl >/dev/null || { echo "kubectl is required on this runner"; exit 1; }
           command -v kubelogin >/dev/null || { echo "kubelogin is required on this runner"; exit 1; }
@@ -49,13 +134,47 @@ jobs:
             --overwrite-existing
           kubelogin convert-kubeconfig -l azurecli
 
-      - name: Deploy AKS Store Demo
+      - name: Deploy manifests with the new ACR images
         run: |
+          set -euo pipefail
           kubectl get pods --namespace "$AKS_NAMESPACE" >/dev/null || {
             echo "Namespace '$AKS_NAMESPACE' must exist and the deploy identity needs namespace access."
             exit 1
           }
-          kubectl apply -f app/aks-store-all-in-one.yaml --namespace "$AKS_NAMESPACE"
+
+          acr_login_server="$ACR_NAME.azurecr.io"
+          sed \
+            -e "s|__ACR_LOGIN_SERVER__|$acr_login_server|g" \
+            -e "s|__IMAGE_TAG__|$GITHUB_SHA|g" \
+            app/aks-store-all-in-one.yaml > "$RUNNER_TEMP/aks-store-all-in-one.yaml"
+          if grep -Eq '__ACR_LOGIN_SERVER__|__IMAGE_TAG__' "$RUNNER_TEMP/aks-store-all-in-one.yaml"; then
+            echo "Store manifest contains unresolved image placeholders."
+            exit 1
+          fi
+          kubectl apply -f "$RUNNER_TEMP/aks-store-all-in-one.yaml" --namespace "$AKS_NAMESPACE"
+
+          if [ "$APPLY_AI_MANIFEST" = "true" ]; then
+            sed \
+              -e "s|__ACR_LOGIN_SERVER__|$acr_login_server|g" \
+              -e "s|__IMAGE_TAG__|$GITHUB_SHA|g" \
+              app/ai-service.yaml > "$RUNNER_TEMP/ai-service.yaml"
+            if grep -Eq '__ACR_LOGIN_SERVER__|__IMAGE_TAG__' "$RUNNER_TEMP/ai-service.yaml"; then
+              echo "AI service manifest contains unresolved image placeholders."
+              exit 1
+            fi
+            kubectl apply -f "$RUNNER_TEMP/ai-service.yaml" --namespace "$AKS_NAMESPACE"
+          fi
+
+          for service in order-service makeline-service product-service store-front store-admin virtual-customer virtual-worker; do
+            kubectl rollout status "deployment/$service" \
+              --namespace "$AKS_NAMESPACE" \
+              --timeout=10m
+          done
+          if [ "$APPLY_AI_MANIFEST" = "true" ]; then
+            kubectl rollout status deployment/ai-service \
+              --namespace "$AKS_NAMESPACE" \
+              --timeout=10m
+          fi
           kubectl wait --for=condition=Ready pods --all \
             --namespace "$AKS_NAMESPACE" \
             --timeout=15m
