@@ -17,7 +17,88 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      apply_ai_manifest: ${{ steps.detect.outputs.apply_ai_manifest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect AI service changes
+        id: detect
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          apply_ai_manifest=false
+          if [[ "$BEFORE" =~ ^0+$ ]]; then
+            changed_files="$(git ls-tree -r --name-only "$GITHUB_SHA")"
+          else
+            changed_files="$(git diff --name-only "$BEFORE" "$GITHUB_SHA")"
+          fi
+
+          while IFS= read -r file; do
+            case "$file" in
+              app/src/ai-service/*|app/ai-service.yaml)
+                apply_ai_manifest=true
+                break
+                ;;
+            esac
+          done <<< "$changed_files"
+
+          echo "apply_ai_manifest=$apply_ai_manifest" >> "$GITHUB_OUTPUT"
+
+  build-and-push:
+    needs: changes
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      ACR_NAME: ${{ vars.ACR_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate registry settings
+        run: |
+          test -n "$ACR_NAME" || { echo "Set repository variable ACR_NAME to the Terraform-created registry name"; exit 1; }
+
+      - name: Sign in to Azure with GitHub OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign in to ACR
+        run: |
+          set -euo pipefail
+          acr_login_server="$ACR_NAME.azurecr.io"
+          acr_token="$(az acr login --name "$ACR_NAME" --expose-token --query accessToken --output tsv)"
+          printf '%s' "$acr_token" | docker login "$acr_login_server" \
+            --username 00000000-0000-0000-0000-000000000000 \
+            --password-stdin
+          echo "ACR_LOGIN_SERVER=$acr_login_server" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push application images
+        run: |
+          set -euo pipefail
+          for service in ai-service makeline-service order-service product-service store-admin store-front virtual-customer virtual-worker; do
+            docker buildx build \
+              --platform linux/amd64 \
+              --build-arg "APP_VERSION=$GITHUB_SHA" \
+              --tag "$ACR_LOGIN_SERVER/$service:$GITHUB_SHA" \
+              --push \
+              "app/src/$service"
+          done
+
   deploy:
+    needs:
+      - changes
+      - build-and-push
     runs-on: [self-hosted, linux, aks-private]
     environment: production
     env:
@@ -25,16 +106,7 @@ jobs:
       AKS_CLUSTER_NAME: ${{ vars.AKS_CLUSTER_NAME }}
       AKS_NAMESPACE: ${{ vars.AKS_NAMESPACE || 'pets' }}
       ACR_NAME: ${{ vars.ACR_NAME }}
-      SERVICES: ${{ needs.changes.outputs.services }}
-      APPLY_STORE_MANIFEST: ${{ needs.changes.outputs.apply_store_manifest }}
       APPLY_AI_MANIFEST: ${{ needs.changes.outputs.apply_ai_manifest }}
-    needs:
-      - changes
-      - build-and-push
-    if: >-
-      always() &&
-      needs.changes.result == 'success' &&
-      (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped')
     steps:
       - uses: actions/checkout@v4
 
@@ -62,136 +134,48 @@ jobs:
             --overwrite-existing
           kubelogin convert-kubeconfig -l azurecli
 
-      - name: Deploy AKS Store Demo
+      - name: Deploy manifests with the new ACR images
         run: |
+          set -euo pipefail
           kubectl get pods --namespace "$AKS_NAMESPACE" >/dev/null || {
             echo "Namespace '$AKS_NAMESPACE' must exist and the deploy identity needs namespace access."
             exit 1
           }
-          if [ "$APPLY_STORE_MANIFEST" = "true" ] || ! kubectl get deployment store-front --namespace "$AKS_NAMESPACE" >/dev/null 2>&1; then
-            kubectl apply -f app/aks-store-all-in-one.yaml --namespace "$AKS_NAMESPACE"
+
+          acr_login_server="$ACR_NAME.azurecr.io"
+          sed \
+            -e "s|__ACR_LOGIN_SERVER__|$acr_login_server|g" \
+            -e "s|__IMAGE_TAG__|$GITHUB_SHA|g" \
+            app/aks-store-all-in-one.yaml > "$RUNNER_TEMP/aks-store-all-in-one.yaml"
+          if grep -Eq '__ACR_LOGIN_SERVER__|__IMAGE_TAG__' "$RUNNER_TEMP/aks-store-all-in-one.yaml"; then
+            echo "Store manifest contains unresolved image placeholders."
+            exit 1
           fi
+          kubectl apply -f "$RUNNER_TEMP/aks-store-all-in-one.yaml" --namespace "$AKS_NAMESPACE"
+
           if [ "$APPLY_AI_MANIFEST" = "true" ]; then
-            kubectl apply -f app/ai-service.yaml --namespace "$AKS_NAMESPACE"
+            sed \
+              -e "s|__ACR_LOGIN_SERVER__|$acr_login_server|g" \
+              -e "s|__IMAGE_TAG__|$GITHUB_SHA|g" \
+              app/ai-service.yaml > "$RUNNER_TEMP/ai-service.yaml"
+            if grep -Eq '__ACR_LOGIN_SERVER__|__IMAGE_TAG__' "$RUNNER_TEMP/ai-service.yaml"; then
+              echo "AI service manifest contains unresolved image placeholders."
+              exit 1
+            fi
+            kubectl apply -f "$RUNNER_TEMP/ai-service.yaml" --namespace "$AKS_NAMESPACE"
           fi
 
-          if [ -n "$SERVICES" ]; then
-            ACR_LOGIN_SERVER="$ACR_NAME.azurecr.io"
-            IFS=',' read -r -a changed_services <<< "$SERVICES"
-            for service in "${changed_services[@]}"; do
-              kubectl set image "deployment/$service" \
-                "$service=$ACR_LOGIN_SERVER/$service:$GITHUB_SHA" \
-                --namespace "$AKS_NAMESPACE"
-              kubectl rollout status "deployment/$service" \
-                --namespace "$AKS_NAMESPACE" \
-                --timeout=10m
-            done
+          for service in order-service makeline-service product-service store-front store-admin virtual-customer virtual-worker; do
+            kubectl rollout status "deployment/$service" \
+              --namespace "$AKS_NAMESPACE" \
+              --timeout=10m
+          done
+          if [ "$APPLY_AI_MANIFEST" = "true" ]; then
+            kubectl rollout status deployment/ai-service \
+              --namespace "$AKS_NAMESPACE" \
+              --timeout=10m
           fi
-
           kubectl wait --for=condition=Ready pods --all \
             --namespace "$AKS_NAMESPACE" \
             --timeout=15m
           kubectl get services --namespace "$AKS_NAMESPACE"
-
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      services: ${{ steps.detect.outputs.services }}
-      apply_store_manifest: ${{ steps.detect.outputs.apply_store_manifest }}
-      apply_ai_manifest: ${{ steps.detect.outputs.apply_ai_manifest }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect changed services and manifests
-        id: detect
-        env:
-          BEFORE: ${{ github.event.before }}
-        run: |
-          set -euo pipefail
-          if [[ "$BEFORE" =~ ^0+$ ]]; then
-            changed_files="$(git ls-tree -r --name-only "$GITHUB_SHA")"
-            apply_store_manifest=true
-            apply_ai_manifest=true
-          else
-            changed_files="$(git diff --name-only "$BEFORE" "$GITHUB_SHA")"
-            apply_store_manifest=false
-            apply_ai_manifest=false
-          fi
-
-          declare -A changed_services=()
-          while IFS= read -r file; do
-            case "$file" in
-              app/src/ai-service/*) changed_services[ai-service]=1; apply_ai_manifest=true ;;
-              app/src/makeline-service/*) changed_services[makeline-service]=1 ;;
-              app/src/order-service/*) changed_services[order-service]=1 ;;
-              app/src/product-service/*) changed_services[product-service]=1 ;;
-              app/src/store-admin/*) changed_services[store-admin]=1 ;;
-              app/src/store-front/*) changed_services[store-front]=1 ;;
-              app/src/virtual-customer/*) changed_services[virtual-customer]=1 ;;
-              app/src/virtual-worker/*) changed_services[virtual-worker]=1 ;;
-              app/aks-store-all-in-one.yaml) apply_store_manifest=true ;;
-              app/ai-service.yaml) apply_ai_manifest=true ;;
-            esac
-          done <<< "$changed_files"
-
-          services=()
-          for service in ai-service makeline-service order-service product-service store-admin store-front virtual-customer virtual-worker; do
-            if [[ -n "${changed_services[$service]+x}" ]]; then
-              services+=("$service")
-            fi
-          done
-          services="$(IFS=,; echo "${services[*]}")"
-          echo "services=$services" >> "$GITHUB_OUTPUT"
-          echo "apply_store_manifest=$apply_store_manifest" >> "$GITHUB_OUTPUT"
-          echo "apply_ai_manifest=$apply_ai_manifest" >> "$GITHUB_OUTPUT"
-          echo "Changed services: ${services:-none}"
-
-  build-and-push:
-    needs: changes
-    if: needs.changes.outputs.services != ''
-    runs-on: ubuntu-latest
-    environment: production
-    env:
-      ACR_NAME: ${{ vars.ACR_NAME }}
-      SERVICES: ${{ needs.changes.outputs.services }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Validate registry settings
-        run: |
-          test -n "$ACR_NAME" || { echo "Set repository variable ACR_NAME to the Terraform-created registry name"; exit 1; }
-
-      - name: Sign in to Azure with GitHub OIDC
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Find ACR and sign in
-        run: |
-          set -euo pipefail
-          acr_login_server="$ACR_NAME.azurecr.io"
-          acr_token="$(az acr login --name "$ACR_NAME" --expose-token --query accessToken --output tsv)"
-          printf '%s' "$acr_token" | docker login "$acr_login_server" \
-            --username 00000000-0000-0000-0000-000000000000 \
-            --password-stdin
-          echo "ACR_LOGIN_SERVER=$acr_login_server" >> "$GITHUB_ENV"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push changed service images
-        run: |
-          set -euo pipefail
-          IFS=',' read -r -a changed_services <<< "$SERVICES"
-          for service in "${changed_services[@]}"; do
-            docker buildx build \
-              --platform linux/amd64 \
-              --build-arg "APP_VERSION=$GITHUB_SHA" \
-              --tag "$ACR_LOGIN_SERVER/$service:$GITHUB_SHA" \
-              --push \
-              "app/src/$service"
-          done
